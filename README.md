@@ -46,34 +46,27 @@ The model is `gpt-3.5-turbo` (unchanged, per the assignment). Requires the
 | **Parent story card** | `format_story_card` | After the story, prints a card: title, the **computed reading level** (*"Grade 2 · ~2 min read"*), category, the lesson, and a chantable refrain if the story repeats one. Reuses the readability metric as a product feature; degrades gracefully (omits the refrain when none is found, and never breaks the read if formatting fails). |
 | **Feedback loop** | `main` | After shipping, the user can request live changes ("make it funnier"). |
 
-## Prompting & agent-design strategies
+## Design & prompting choices
 
-- **Multi-label category routing** — a request can blend types (e.g. `funny` +
-  `educational`); the writer guidance is blended, and a `must_include` list makes
-  concrete asks impossible to silently drop.
-- **Plan-then-write (decomposition)** — outline the arc before writing prose.
+- **Multi-label routing + `must_include`** — a request can blend types (`funny` +
+  `educational`), and concrete asks (a fact, a named character) are tracked so
+  they can't be silently dropped.
+- **Plan-then-write toward sleep** — outline the arc before writing prose, with
+  energy deliberately winding *down* at the end. The judge fails endings too
+  stimulating to sleep after — the one thing a generic "kids' story" prompt gets
+  wrong.
 - **Generator/critic separation** — the judge runs as a *different persona* so it
   critiques honestly instead of rubber-stamping its own output.
-- **Score-anchored, structured-JSON evaluation** — every rubric dimension defines
-  what a 10 / 5 / 1 looks like, and the judge runs at temperature 0. This makes
-  scoring repeatable (judging the same story 3× returns identical scores) instead
-  of drifting run-to-run, so the loop is programmable, not vibes.
-- **Reflexion / self-refine** — judge feedback drives targeted rewrites.
-- **Cheap-check-first** — deterministic readability gate before the LLM judge.
-
-## Design choices worth calling out
-
-- **Bedtime wind-down is a hard rubric criterion.** A generic "write a kids' story"
-  prompt ends on excitement; the judge here specifically fails endings too
-  stimulating for sleep.
-- **Read-aloud focus.** Stories are *heard*, so the writer is told to include a
-  short repeatable refrain the child can chant along with.
-- **Safety is layered and fails closed** — a pre-gate, a double-weighted judge
-  dimension, *and* a hard safety floor: a story that scores below the floor is
-  never shipped even if its other scores are high. For a healthcare-adjacent
-  product, "fail safe" beats "ship something."
-- **Best-draft tracking** — the loop returns the highest-scoring safe draft it
-  saw, not just the last one, so a regressing rewrite can't lower the output.
+- **Score-anchored judging** — every rubric dimension defines what a 10 / 5 / 1
+  looks like, at temperature 0, so scores are repeatable (same story 3× → identical
+  scores) instead of drifting run-to-run.
+- **Cheap-check-first** — a free deterministic readability gate runs before the
+  paid LLM judge.
+- **Layered, fail-closed safety** — a pre-gate, a double-weighted judge dimension,
+  *and* a hard safety floor: a below-floor story is never shipped even if its other
+  scores are high. For a healthcare-adjacent product, "fail safe" beats "ship
+  something." The loop also keeps the best-scoring safe draft, so a regressing
+  rewrite can't lower the output.
 
 ## Testing & evaluation
 
@@ -82,7 +75,7 @@ Two layers, split by what's deterministic:
 - **`test_main.py` (unit tests, `pytest`)** — the deterministic logic: readability
   math, JSON repair, strategy blending, classifier defaults, and the pipeline's
   draft-selection logic (best-draft tracking, safety fail-closed, readability
-  tiebreak) tested by **mocking the LLM boundary**. 15 tests, no API calls, <1s.
+  tiebreak) tested by **mocking the LLM boundary**. 20 tests, no API calls, <1s.
 - **`eval.py` (integration/regression)** — runs a fixed suite (one per category +
   a blend + a safety case) through the real pipeline and reports each story's
   judge score and reading grade plus a suite average. Run it before and after a
@@ -92,9 +85,9 @@ Two layers, split by what's deterministic:
 The LLM calls are non-deterministic and cost money, so they live in the eval
 harness; everything free and deterministic is unit-tested.
 
-## Future work
+## Future work (with 2 more hours)
 
-Given 2 more hours, I'd grow the storyteller–judge loop into a fuller parent-facing
+Given more time, I'd grow the storyteller–judge loop into a fuller parent-facing
 product **without weakening the safety-first design it's built on** — every new
 capability would pass *through* the judge, never around it.
 

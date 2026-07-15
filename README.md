@@ -92,9 +92,9 @@ Two layers, split by what's deterministic:
 The LLM calls are non-deterministic and cost money, so they live in the eval
 harness; everything free and deterministic is unit-tested.
 
-## Future work (with 2 more hours)
+## Future work
 
-Given more time, I'd grow the storyteller–judge loop into a fuller parent-facing
+Given 2 more hours, I'd grow the storyteller–judge loop into a fuller parent-facing
 product **without weakening the safety-first design it's built on** — every new
 capability would pass *through* the judge, never around it.
 

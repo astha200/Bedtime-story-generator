@@ -378,7 +378,6 @@ def main():
 
     present(story, c)
 
-    # User feedback loop: let the child/parent request changes.
     while True:
         change = input("\nWant any changes? (e.g. 'make it funnier', or press "
                        "Enter to finish) ").strip()

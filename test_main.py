@@ -154,6 +154,47 @@ def test_tiebreak_prefers_more_readable_draft(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
+# Revision re-validation (a user edit must pass the same safety floor)
+# --------------------------------------------------------------------------- #
+def test_revision_accepts_a_safe_edit(monkeypatch):
+    monkeypatch.setattr(main, "write_story", MagicMock(side_effect=["EDITED"]))
+    monkeypatch.setattr(main, "judge_story",
+                        MagicMock(side_effect=[{"overall": 9.0,
+                                                "scores": {"safety": 10}}]))
+    monkeypatch.setattr(main, "readability_grade", MagicMock(return_value=4.0))
+    story, verdict = main.revise_story(_safe_classification(), "ORIGINAL",
+                                       "make it funnier", verbose=False)
+    assert story == "EDITED"
+    assert verdict["scores"]["safety"] == 10
+
+
+def test_revision_fails_closed_when_edit_is_unsafe(monkeypatch):
+    # Both revision attempts come back below the safety floor -> keep prior story.
+    monkeypatch.setattr(main, "write_story",
+                        MagicMock(side_effect=["BAD1", "BAD2"]))
+    monkeypatch.setattr(main, "judge_story",
+                        MagicMock(side_effect=[{"overall": 9.0, "scores": {"safety": 3}},
+                                               {"overall": 9.0, "scores": {"safety": 2}}]))
+    monkeypatch.setattr(main, "readability_grade", MagicMock(return_value=4.0))
+    story, _ = main.revise_story(_safe_classification(), "ORIGINAL",
+                                 "make it scary", verbose=False)
+    assert story is None                       # caller keeps the prior, vetted story
+
+
+def test_revision_retries_then_accepts_once_safe(monkeypatch):
+    # First edit is unsafe, the safety-nudged retry clears the floor.
+    monkeypatch.setattr(main, "write_story",
+                        MagicMock(side_effect=["BAD1", "FIXED"]))
+    monkeypatch.setattr(main, "judge_story",
+                        MagicMock(side_effect=[{"overall": 9.0, "scores": {"safety": 4}},
+                                               {"overall": 9.0, "scores": {"safety": 9}}]))
+    monkeypatch.setattr(main, "readability_grade", MagicMock(return_value=4.0))
+    story, _ = main.revise_story(_safe_classification(), "ORIGINAL",
+                                 "make it longer", verbose=False)
+    assert story == "FIXED"
+
+
+# --------------------------------------------------------------------------- #
 # Parent story card (all deterministic)
 # --------------------------------------------------------------------------- #
 def test_reading_level_label():

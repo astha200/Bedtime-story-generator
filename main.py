@@ -23,12 +23,12 @@ Already built: multi-label routing + must-include coverage, a score-anchored LLM
 judge, a deterministic readability gate, best-draft tracking, fail-closed safety,
 a parent story card, an eval harness (eval.py), and unit tests (test_main.py).
 
+User revisions are re-validated too: a follow-up like "make it funnier" is routed
+back through the judge + safety floor via revise_story, so an edit can't be a side
+door around the guardrails the first draft had to clear.
+
 What I would build next if I spent 2 more hours on this project (see README.md
 for the fuller write-up):
-  * Route user revisions back through the judge. Today a follow-up like "make it
-    funnier" goes straight to the writer and skips the judge + safety floor, so a
-    safe draft could regress after an edit. Most important correctness fix, and
-    small -- the pipeline already exists.
   * Validate-then-illustrate: generate an image prompt from the judge-APPROVED
     story text (never the raw request), so any illustration inherits the same
     guardrails the story passed.
@@ -261,9 +261,12 @@ def generate_story(user_input: str, verbose: bool = True):
             break
 
         feedback = verdict.get("feedback", "")
-        if grade > TARGET_GRADE_MAX + 1.0:
-            feedback += (f" The reading level is too high (grade {grade}); use "
-                         f"shorter sentences and simpler words.")
+        if grade > TARGET_GRADE_MAX:
+            feedback += (f" READING LEVEL: the story reads at grade {grade}, but "
+                         f"the target is <= {TARGET_GRADE_MAX}. This is the top "
+                         f"priority to fix: rewrite in plain prose (no rhyme), break "
+                         f"every long sentence into short ones under ~10 words, and "
+                         f"swap fancy words for simple ones a 6-year-old knows.")
         story = write_story(c, outline, prior_story=story, feedback=feedback)
 
     # If no draft ever cleared the safety floor, fail closed rather than ship.
@@ -273,6 +276,41 @@ def generate_story(user_input: str, verbose: bool = True):
         return None, c, verdict
 
     return best["story"], c, best["verdict"]
+
+
+# --------------------------------------------------------------------------- #
+# Revision: apply a user-requested change, then RE-VALIDATE it.
+# --------------------------------------------------------------------------- #
+def revise_story(c: dict, prior_story: str, change: str, verbose: bool = True):
+    """Apply a user's live change ("make it funnier"), then run the new draft back
+    through the judge and the SAME safety floor the first draft had to clear.
+
+    The first-generation pipeline gates every draft on safety; a user edit must not
+    be a side door around that. Returns (story, verdict) on success, or (None, ...)
+    if the edit can't be made safe -- in which case the caller keeps the prior,
+    already-vetted story rather than shipping an unchecked revision.
+    """
+    story = write_story(c, outline="", prior_story=prior_story, feedback=change)
+    verdict: dict = {}
+    for attempt in range(1, MAX_REVISIONS + 1):
+        grade = readability_grade(story)
+        verdict = judge_story(story, c, grade)
+        safety = float(verdict.get("scores", {}).get("safety", 10) or 0)
+        if verbose:
+            overall = float(verdict.get("overall", 0) or 0)
+            print(f"[revision {attempt}: judge {overall:.1f}/10, safety {safety:.0f}, "
+                  f"reading grade {grade}]")
+        if safety >= SAFETY_FLOOR:
+            return story, verdict
+        if attempt == MAX_REVISIONS:
+            break
+        # Try once more, telling the writer to fix the safety problem specifically.
+        feedback = (verdict.get("feedback", "") + " Keep it fully warm, gentle, and "
+                    "safe for a young child at bedtime -- nothing scary, violent, "
+                    "sad, or upsetting.")
+        story = write_story(c, outline="", prior_story=story, feedback=feedback)
+    # Fail closed: the edit could not be made safe. Keep the prior story.
+    return None, verdict
 
 
 # --------------------------------------------------------------------------- #
@@ -384,7 +422,12 @@ def main():
         if not change:
             print("Sweet dreams! ")
             break
-        story = write_story(c, outline="", prior_story=story, feedback=change)
+        revised, _ = revise_story(c, story, change)
+        if revised is None:
+            print("\nI couldn't make that change while keeping it safe and cozy for "
+                  "bedtime, so I've kept the previous story. Want a different tweak?\n")
+            continue
+        story = revised
         present(story, c)
 
 

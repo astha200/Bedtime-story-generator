@@ -44,7 +44,7 @@ The model is `gpt-3.5-turbo` (unchanged, per the assignment). Requires the
 | **LLM Judge** | `judge_story` | Separate critic persona scores 7 rubric dimensions incl. **coverage** of the `must_include` list (safety, calming-ending & coverage weighted double) and returns concrete edits as JSON. |
 | **Refine loop** | `generate_story` | Feeds judge feedback back to the writer, capped at `MAX_REVISIONS` for cost/latency. Keeps the **best-scoring** draft (a later rewrite can regress), and **fails closed** — a draft below the safety floor is never eligible to ship, and if nothing clears it, no story is returned. |
 | **Parent story card** | `format_story_card` | After the story, prints a card: title, the **computed reading level** (*"Grade 2 · ~2 min read"*), category, the lesson, and a chantable refrain if the story repeats one. Reuses the readability metric as a product feature; degrades gracefully (omits the refrain when none is found, and never breaks the read if formatting fails). |
-| **Feedback loop** | `main` | After shipping, the user can request live changes ("make it funnier"). |
+| **Feedback loop** | `main` / `revise_story` | After shipping, the user can request live changes ("make it funnier"). Each edit is **re-validated through the same judge + safety floor** as the first draft; if an edit can't be made safe, the prior vetted story is kept rather than shipping an unchecked revision. |
 
 ## Design & prompting choices
 
@@ -91,11 +91,6 @@ Given more time, I'd grow the storyteller–judge loop into a fuller parent-faci
 product **without weakening the safety-first design it's built on** — every new
 capability would pass *through* the judge, never around it.
 
-- **Route revisions back through the judge.** Today a follow-up like *"make it
-  funnier"* goes straight to the writer and **skips the judge + safety floor**, so
-  a safe draft could regress after an edit. Routing every revision through the
-  same pipeline the first draft clears is the most important correctness fix — and
-  it's small, since the pipeline already exists.
 - **Parent controls.** The classifier already extracts categories and
   `must_include`; I'd add explicit knobs — target age, length, and tone (calming
   vs. adventurous) — that feed the planner and the reading-level target, reusing

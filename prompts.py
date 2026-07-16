@@ -108,7 +108,11 @@ Voice & style for THIS story (blend these):
 {blended_strategy(c['categories'])}
 
 Always follow these rules:
-- Simple, concrete words a 5-7 year old knows. Short sentences.
+- Simple, concrete words a 5-7 year old knows. Prefer one-syllable words.
+- Write in plain PROSE, never rhyme or verse. Rhyme forces long, fancy lines that
+  are too hard for this age -- do not rhyme.
+- Keep sentences SHORT: aim for under ~10 words, one idea per sentence. Break any
+  long sentence into two.
 - Read-aloud friendly: a soft rhythm, and a short repeated phrase the child can
   chant along with.
 - Warm and reassuring. Nothing violent, scary, sad-ending, or inappropriate.
